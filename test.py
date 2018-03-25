@@ -80,6 +80,19 @@ def apply_max_pool(x, kernel_size, stride_size):
                           strides=[1, 1, stride_size, 1], padding='VALID')
 
 
+# 参数概要
+def variable_summaries(var):
+    with tf.name_scope('summaries'):
+        mean = tf.reduce_mean(var)
+        tf.summary.scalar('mean', mean)  # 平均值
+        with tf.name_scope('stddev'):
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+        tf.summary.scalar('stddev', stddev)  # 标准差
+        tf.summary.scalar('max', tf.reduce_max(var))  # 最大值
+        tf.summary.scalar('min', tf.reduce_min(var))  # 最小值
+        tf.summary.histogram('histogram', var)  # 直方图
+
+
 dataset = read_data('WISDM_ar_v1.1_raw.txt')
 dataset['x-axis'] = feature_normalize(dataset['x-axis'])
 dataset['y-axis'] = feature_normalize(dataset['y-axis'])
@@ -113,49 +126,76 @@ num_hidden = 1000
 learning_rate = 0.0001
 
 # 降低 cost 的迭代次数
-training_epochs = 12
+training_epochs = 14
 
 total_batchs = reshaped_segments.shape[0] // batch_size
 
 # 下面是使用 Tensorflow 创建神经网络的过程。
-X = tf.placeholder(tf.float32, shape=[None, input_height, input_width, num_channels])
-Y = tf.placeholder(tf.float32, shape=[None, num_labels])
+with tf.name_scope('input'):
+    X = tf.placeholder(tf.float32, shape=[None, input_height, input_width, num_channels])
+    Y = tf.placeholder(tf.float32, shape=[None, num_labels])
 
-c = apply_depthwise_conv(X, kernel_size, num_channels, depth)
-p = apply_max_pool(c, 20, 2)
-c = apply_depthwise_conv(p, 6, depth * num_channels, depth // 10)
+with tf.name_scope('apply'):
+    c = apply_depthwise_conv(X, kernel_size, num_channels, depth)
+    p = apply_max_pool(c, 20, 2)
+    c = apply_depthwise_conv(p, 6, depth * num_channels, depth // 10)
 
 shape = c.get_shape().as_list()
-c_flat = tf.reshape(c, [-1, shape[1] * shape[2] * shape[3]])
+with tf.name_scope('input_reshape'):
+    c_flat = tf.reshape(c, [-1, shape[1] * shape[2] * shape[3]])
 
-f_weights_l1 = weight_variable([shape[1] * shape[2] * depth * num_channels * (depth // 10), num_hidden])
-f_biases_l1 = bias_variable([num_hidden])
-f = tf.nn.tanh(tf.add(tf.matmul(c_flat, f_weights_l1), f_biases_l1))
+with tf.name_scope('layer1'):
+    with tf.name_scope('weights1'):
+        f_weights_l1 = weight_variable([shape[1] * shape[2] * depth * num_channels * (depth // 10), num_hidden])
+        variable_summaries(f_weights_l1)
+    with tf.name_scope('biases1'):
+        f_biases_l1 = bias_variable([num_hidden])
+        variable_summaries(f_biases_l1)
+    with tf.name_scope('tanh'):
+        f = tf.nn.tanh(tf.add(tf.matmul(c_flat, f_weights_l1), f_biases_l1))
 
-out_weights = weight_variable([num_hidden, num_labels])
-out_biases = bias_variable([num_labels])
+with tf.name_scope('layer2'):
+    with tf.name_scope('weights2'):
+        out_weights = weight_variable([num_hidden, num_labels])
+        variable_summaries(out_weights)
+    with tf.name_scope('biases2'):
+        out_biases = bias_variable([num_labels])
+        variable_summaries(out_biases)
+    with tf.name_scope('softmax'):
+        y_ = tf.nn.softmax(tf.matmul(f, out_weights) + out_biases)
 
-y_ = tf.nn.softmax(tf.matmul(f, out_weights) + out_biases)
+with tf.name_scope('loss'):
+    loss = -tf.reduce_sum(Y * tf.log(y_))
+    tf.summary.scalar('loss', loss)
+with tf.name_scope('train'):
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(loss)
 
-loss = -tf.reduce_sum(Y * tf.log(y_))
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(loss)
-
-correct_prediction = tf.equal(tf.argmax(y_, 1), tf.argmax(Y, 1))
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+with tf.name_scope('accuracy'):
+    with tf.name_scope('correct_prediction'):
+        # 结果存放在一个布尔型列表中
+        correct_prediction = tf.equal(tf.argmax(y_, 1), tf.argmax(Y, 1))
+    with tf.name_scope('accuracy'):
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        tf.summary.scalar('accuracy', accuracy)
 
 cost_history = np.empty(shape=[1], dtype=float)
+
+# 合并所有的summary
+merged = tf.summary.merge_all()
 
 # 开始训练
 with tf.Session() as session:
     tf.global_variables_initializer().run()
+    writer = tf.summary.FileWriter('logs/', session.graph)
     # 开始迭代
     for epoch in range(training_epochs):
         for b in range(total_batchs):
             offset = (b * batch_size) % (train_y.shape[0] - batch_size)
             batch_x = train_x[offset:(offset + batch_size), :, :, :]
             batch_y = train_y[offset:(offset + batch_size), :]
-            _, c = session.run([optimizer, loss], feed_dict={X: batch_x, Y: batch_y})
+            c, summary = session.run([loss, merged], feed_dict={X: batch_x, Y: batch_y})
             cost_history = np.append(cost_history, c)
+        writer.add_summary(summary, epoch)
         print("Epoch {}: Training Loss = {}, Training Accuracy = {}".format(
             epoch, c, session.run(accuracy, feed_dict={X: train_x, Y: train_y})))
     y_p = tf.argmax(y_, 1)
