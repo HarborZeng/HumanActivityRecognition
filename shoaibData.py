@@ -141,7 +141,7 @@ input_width = 90
 num_labels = 6
 num_channels = 3
 
-batch_size = 100
+batch_size = 10
 kernel_size = 60
 depth = 120
 
@@ -151,7 +151,7 @@ num_hidden = 1000
 learning_rate = 0.0001
 
 # 降低 cost 的迭代次数
-training_epochs = 70
+training_epochs = 47
 
 total_batchs = reshaped_segments.shape[0] // batch_size
 
