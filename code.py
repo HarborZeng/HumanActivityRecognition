@@ -114,7 +114,7 @@ def plot_activity(activity, data):
     plt.show()
 
 
-dataset = read_data('WISDM_ar_v1.1_raw.txt')
+dataset = read_data('WISDM_and_shoaib_data/data.txt')
 dataset['x-axis'] = feature_normalize(dataset['x-axis'])
 dataset['y-axis'] = feature_normalize(dataset['y-axis'])
 dataset['z-axis'] = feature_normalize(dataset['z-axis'])
@@ -138,12 +138,12 @@ test_y = labels[~train_test_split]
 # 定义输入数据的维度和标签个数
 input_height = 1
 input_width = 90
-num_labels = 6
+num_labels = 7
 num_channels = 3
 
-batch_size = 10
+batch_size = 50
 kernel_size = 60
-depth = 60
+depth = 100
 
 # 隐藏层神经元个数
 num_hidden = 1000
@@ -151,7 +151,7 @@ num_hidden = 1000
 learning_rate = 0.0001
 
 # 降低 cost 的迭代次数
-training_epochs = 14
+training_epochs = 100
 
 total_batchs = reshaped_segments.shape[0] // batch_size
 
@@ -219,6 +219,7 @@ with tf.Session() as session:
             batch_x = train_x[offset:(offset + batch_size), :, :, :]
             batch_y = train_y[offset:(offset + batch_size), :]
             _, c, summary = session.run([optimizer, loss, merged], feed_dict={X: batch_x, Y: batch_y})
+            # _, c = session.run([optimizer, loss], feed_dict={X: batch_x, Y: batch_y})
             cost_history = np.append(cost_history, c)
         writer.add_summary(summary, epoch)
         print("Epoch {}: Training Loss = {}, Training Accuracy = {}".format(

@@ -118,7 +118,7 @@ num_channels = 3
 
 batch_size = 10
 kernel_size = 60
-depth = 60
+depth = 120
 
 # 隐藏层神经元个数
 num_hidden = 1000
@@ -198,6 +198,7 @@ with tf.Session() as session:
         writer.add_summary(summary, epoch)
         print("Epoch {}: Training Loss = {}, Training Accuracy = {}".format(
             epoch, c, session.run(accuracy, feed_dict={X: train_x, Y: train_y})))
+
     y_p = tf.argmax(y_, 1)
     y_true = np.argmax(test_y, 1)
     final_acc, y_pred = session.run([accuracy, y_p], feed_dict={X: test_x, Y: test_y})

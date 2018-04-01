@@ -43,7 +43,7 @@ def plot_activity(activity, data):
     plt.show()
 
 
-dataset = read_data('WISDM_ar_v1.1_raw.txt')
+dataset = read_data('data.txt')
 dataset['x-axis'] = feature_normalize(dataset['x-axis'])
 dataset['y-axis'] = feature_normalize(dataset['y-axis'])
 dataset['z-axis'] = feature_normalize(dataset['z-axis'])
