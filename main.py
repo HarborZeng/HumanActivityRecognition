@@ -58,15 +58,15 @@ def segment_signal(data, window_size=90):
 
 
 # 初始化神经网络参数
-def weight_variable(shape):
+def weight_variable(shape, name):
     initial = tf.truncated_normal(shape, stddev=0.1)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=name)
 
 
 # 初始化神经网络参数
-def bias_variable(shape):
+def bias_variable(shape, name):
     initial = tf.constant(0.0, shape=shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=name)
 
 
 # 执行卷积操作
@@ -76,8 +76,8 @@ def depthwise_conv2d(x, W):
 
 # 为输入数据的每个 channel 执行一维卷积，并输出到 ReLU 激活函数
 def apply_depthwise_conv(x, kernel_size, num_channels, depth):
-    weights = weight_variable([1, kernel_size, num_channels, depth])
-    biases = bias_variable([depth * num_channels])
+    weights = weight_variable([1, kernel_size, num_channels, depth], name='weight')
+    biases = bias_variable([depth * num_channels], name='bias')
     return tf.nn.relu(tf.add(depthwise_conv2d(x, weights), biases))
 
 
@@ -189,20 +189,21 @@ with tf.name_scope('input_reshape'):
 
 with tf.name_scope('layer1'):
     with tf.name_scope('weights1'):
-        f_weights_l1 = weight_variable([shape[1] * shape[2] * depth * num_channels * (depth // 10), num_hidden])
+        f_weights_l1 = weight_variable([shape[1] * shape[2] * depth * num_channels * (depth // 10), num_hidden],
+                                       name='weight')
         variable_summaries(f_weights_l1)
     with tf.name_scope('biases1'):
-        f_biases_l1 = bias_variable([num_hidden])
+        f_biases_l1 = bias_variable([num_hidden], name='bias')
         variable_summaries(f_biases_l1)
     with tf.name_scope('tanh'):
         f = tf.nn.tanh(tf.add(tf.matmul(c_flat, f_weights_l1), f_biases_l1))
 
 with tf.name_scope('layer2'):
     with tf.name_scope('weights2'):
-        out_weights = weight_variable([num_hidden, num_labels])
+        out_weights = weight_variable([num_hidden, num_labels], name='weight')
         variable_summaries(out_weights)
     with tf.name_scope('biases2'):
-        out_biases = bias_variable([num_labels])
+        out_biases = bias_variable([num_labels], name='bias')
         variable_summaries(out_biases)
     with tf.name_scope('softmax'):
         y_ = tf.nn.softmax(tf.matmul(f, out_weights) + out_biases)
