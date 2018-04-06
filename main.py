@@ -178,14 +178,16 @@ with tf.name_scope('input'):
     X = tf.placeholder(tf.float32, shape=[None, input_height, input_width, num_channels])
     Y = tf.placeholder(tf.float32, shape=[None, num_labels])
 
-with tf.name_scope('apply'):
+with tf.name_scope('conv1'):
     c = apply_depthwise_conv(X, kernel_size, num_channels, depth)
     p = apply_max_pool(c, 20, 2)
+with tf.name_scope('conv2'):
     c = apply_depthwise_conv(p, 6, depth * num_channels, depth // 10)
+    p = apply_max_pool(c, 1, 2)
 
-shape = c.get_shape().as_list()
+shape = p.get_shape().as_list()
 with tf.name_scope('input_reshape'):
-    c_flat = tf.reshape(c, [-1, shape[1] * shape[2] * shape[3]])
+    c_flat = tf.reshape(p, [-1, shape[1] * shape[2] * shape[3]])
 
 with tf.name_scope('layer1'):
     with tf.name_scope('weights1'):
