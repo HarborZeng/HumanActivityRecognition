@@ -4,6 +4,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from scipy import stats
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
+import seaborn as sn
 
 
 # 加载数据集
@@ -32,8 +33,6 @@ def windows(data, size):
 
 
 # 创建输入数据，每一组数据包含 x, y, z 三个轴的 90 条连续记录，
-# 用 `stats.mode` 方法获取这 90 条记录中出现次数最多的行为
-# 作为该组行为的标签，这里有待商榷，其实可以完全使用同一种行为的数据记录
 # 来创建一组数据用于输入的。
 def segment_signal(data, window_size=90):
     segments = np.empty((0, window_size, 9))
@@ -107,6 +106,9 @@ def plot_axis(ax, x, y, title):
     ax.set_ylim([min(y) - np.std(y), max(y) + np.std(y)])
     ax.set_xlim([min(x), max(x)])
     ax.grid(True)
+    print(title)
+    sigma = np.std(y, axis=0)
+    print(sigma * sigma)
 
 
 def plot_activity(activity, data):
@@ -164,7 +166,7 @@ kernel_size = 60
 depth = 120
 
 # 隐藏层神经元个数
-num_hidden = 1000
+num_hidden = 100
 
 learning_rate = 0.0001
 
@@ -187,18 +189,19 @@ with tf.name_scope('conv2'):
 
 shape = p.get_shape().as_list()
 with tf.name_scope('input_reshape'):
-    c_flat = tf.reshape(p, [-1, shape[1] * shape[2] * shape[3]])
+    p_flat = tf.reshape(p, [-1, shape[1] * shape[2] * shape[3]])
 
 with tf.name_scope('layer1'):
     with tf.name_scope('weights1'):
-        f_weights_l1 = weight_variable([shape[1] * shape[2] * depth * num_channels * (depth // 10), num_hidden],
+        f_weights_l1 = weight_variable([shape[1] * shape[2] * depth *
+                                        num_channels * (depth // 10), num_hidden],
                                        name='weight')
         variable_summaries(f_weights_l1)
     with tf.name_scope('biases1'):
         f_biases_l1 = bias_variable([num_hidden], name='bias')
         variable_summaries(f_biases_l1)
     with tf.name_scope('tanh'):
-        f = tf.nn.tanh(tf.add(tf.matmul(c_flat, f_weights_l1), f_biases_l1))
+        f = tf.nn.tanh(tf.add(tf.matmul(p_flat, f_weights_l1), f_biases_l1))
 
 with tf.name_scope('layer2'):
     with tf.name_scope('weights2'):
@@ -260,4 +263,14 @@ with tf.Session() as session:
     print("Recall", recall_score(y_true, y_pred, average='weighted'))
     print("f1_score", f1_score(y_true, y_pred, average='weighted'))
     print("confusion_matrix")
-    print(confusion_matrix(y_true, y_pred))
+    conf_mat = confusion_matrix(y_true, y_pred)
+    print(conf_mat)
+
+    activity_lables = ['downstairs', 'running', 'sitting', 'standing', 'upstairs', 'walking']
+    df_cm = pd.DataFrame(conf_mat, index=[i for i in activity_lables],
+                         columns=[i for i in activity_lables])
+    plt.figure(figsize=(10, 7))
+    sn.heatmap(df_cm, annot=True, fmt="d", cmap="YlGnBu")
+    plt.title('confusion matrix')
+    plt.show()
+

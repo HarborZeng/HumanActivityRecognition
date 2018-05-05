@@ -1,12 +1,17 @@
+import os
+
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from scipy import stats
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
-
+import seaborn as sn
 
 # 加载数据集
+from tensorflow.python.framework import graph_util
+
+
 def read_data(file_path):
     column_names = ['Time_Stamp', 'Ax', 'Ay', 'Az', 'Gx', 'Gy', 'Gz', 'Mx', 'My', 'Mz', 'Activity_Label']
     # data = pd.read_csv(file_path, header=None, names=column_names)
@@ -169,7 +174,7 @@ num_hidden = 1000
 learning_rate = 0.0001
 
 # 降低 cost 的迭代次数
-training_epochs = 150
+training_epochs = 120
 
 # 输入图片是28*28
 n_inputs = 90  # 输入一行，一行有28个数据
@@ -177,6 +182,8 @@ max_time = 9  # 一共28行
 lstm_size = 100  # 隐层单元
 n_classes = 6  # 10个分类
 n_batch = reshaped_segments.shape[0] // batch_size  # 计算一共有多少个批次
+
+pb_file_path = os.getcwd()
 
 # 下面是使用 Tensorflow 创建神经网络的过程。
 with tf.name_scope('input'):
@@ -189,17 +196,18 @@ weights = tf.Variable(tf.truncated_normal([lstm_size, n_classes], stddev=0.1))
 biases = tf.Variable(tf.constant(0.1, shape=[n_classes]))
 
 
-
 # 定义RNN网络
 def RNN(X, weights, biases):
     # inputs=[batch_size, max_time, n_inputs]
-    inputs = tf.reshape(X, [-1, max_time, n_inputs])
+    with tf.name_scope('reshape'):
+        inputs = tf.reshape(X, [-1, max_time, n_inputs])
     # 定义LSTM基本CELL
-    lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
-    # final_state[0]是cell state
-    # final_state[1]是hidden_state
-    outputs, final_state = tf.nn.dynamic_rnn(lstm_cell, inputs, dtype=tf.float32)
-    results = tf.nn.softmax(tf.matmul(final_state[1], weights) + biases)
+    with tf.name_scope('basicLSTMCell'):
+        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
+    with tf.name_scope('dynamicRNN'):
+        outputs, final_state = tf.nn.dynamic_rnn(lstm_cell, inputs, dtype=tf.float32)
+    with tf.name_scope('softmax'):
+        results = tf.nn.softmax(tf.matmul(final_state[1], weights) + biases)
     return results
 
 
@@ -228,6 +236,7 @@ merged = tf.summary.merge_all()
 with tf.Session() as session:
     tf.global_variables_initializer().run()
     writer = tf.summary.FileWriter('logs/', session.graph)
+    # convert_variables_to_constants 需要指定output_node_names，list()，可以多个
     # 开始迭代
     for epoch in range(training_epochs):
         for b in range(n_batch):
@@ -240,10 +249,15 @@ with tf.Session() as session:
         writer.add_summary(summary, epoch)
         print("Epoch {}: Training Loss = {}, Training Accuracy = {}".format(
             epoch, c, session.run(accuracy, feed_dict={X: train_x, Y: train_y})))
+        tf.train.write_graph(session.graph_def, pb_file_path, 'expert-graph.pb', as_text=False)
+
     y_p = tf.argmax(y_, 1)
     y_true = np.argmax(test_y, 1)
     final_acc, y_pred = session.run([accuracy, y_p], feed_dict={X: test_x, Y: test_y})
     print("Testing Accuracy: {}".format(final_acc))
+
+    # tf.train.write_graph(session.graph_def, pb_file_path, 'expert-graph.pb', as_text=False)
+
     temp_y_true = np.unique(y_true)
     temp_y_pred = np.unique(y_pred)
     np.save("y_true", y_true)
@@ -255,4 +269,13 @@ with tf.Session() as session:
     print("Recall", recall_score(y_true, y_pred, average='weighted'))
     print("f1_score", f1_score(y_true, y_pred, average='weighted'))
     print("confusion_matrix")
-    print(confusion_matrix(y_true, y_pred))
+    conf_mat = confusion_matrix(y_true, y_pred)
+    print(conf_mat)
+
+    activity_lables = ['downstairs', 'running', 'sitting', 'standing', 'upstairs', 'walking']
+    df_cm = pd.DataFrame(conf_mat, index=[i for i in activity_lables],
+                         columns=[i for i in activity_lables])
+    plt.figure(figsize=(10, 7))
+    sn.heatmap(df_cm, annot=True, fmt="d", cmap="YlGnBu")
+    plt.title('confusion matrix')
+    plt.show()
